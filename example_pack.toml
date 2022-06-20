@@ -1,0 +1,13 @@
+name = "My Modpack"
+version = "1.0.0"
+loader = "forge"
+mc_version = "1.18.2"
+
+[mods.client]
+rubidium = 574856
+
+[mods.server]
+terralith = 513688
+
+[mods.all]
+cctweaked = 282001
