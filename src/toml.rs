@@ -1,4 +1,4 @@
-use crate::errors::{BreezeError, BreezeErrorKind};
+use crate::errors::BreezeError;
 use crate::{Loader, Mod, ModSide};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -36,7 +36,7 @@ pub fn parse(toml: String) -> Result<Pack, Box<dyn std::error::Error>> {
     let loader: Loader = match data.loader.to_lowercase().as_str() {
         "forge" => Loader::Forge,
         "fabric" => Loader::Fabric,
-        _ => return Err(Box::new(BreezeError::new(BreezeErrorKind::InvalidLoader))),
+        _ => return Err(Box::new(BreezeError::InvalidLoader)),
     };
 
     let mut mods: Vec<Mod> = Vec::new();
