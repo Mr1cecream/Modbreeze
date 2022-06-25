@@ -1,20 +1,17 @@
 use crate::{errors::BreezeError, toml::Pack, Mod, ModSide};
 use anyhow::Result;
-use fs_extra::{
-    dir::{copy as copy_dir, CopyOptions as DirCopyOptions},
-    file::{move_file, CopyOptions as FileCopyOptions},
-};
+use fs_extra::file::{move_file, CopyOptions as FileCopyOptions};
 use furse::Furse;
 use itertools::Itertools;
 use libium::upgrade::{mod_downloadable, Downloadable};
 use log::warn;
-use std::sync::Arc;
 use std::{
     fs::read_dir,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use tokio::{
-    fs::{copy, create_dir_all, remove_file},
+    fs::{create_dir_all, remove_file},
     spawn,
     sync::Semaphore,
 };
