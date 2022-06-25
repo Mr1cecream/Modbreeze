@@ -8,7 +8,6 @@ mod download;
 mod errors;
 mod toml;
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq)]
 pub struct Mod {
     name: String,
@@ -16,19 +15,11 @@ pub struct Mod {
     side: ModSide,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum ModSide {
     Client,
     Server,
     All,
-}
-
-#[allow(dead_code)]
-#[derive(Debug)]
-enum Loader {
-    Fabric,
-    Forge,
 }
 
 #[tokio::main]
