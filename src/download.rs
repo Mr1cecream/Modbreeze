@@ -21,17 +21,22 @@ use tokio::{
 pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Downloadable>> {
     let api_key = env!("CF_API_KEY");
     let furse = Furse::new(api_key);
-    let mods: Vec<&Mod> = pack
-        .mods
-        .iter()
-        .filter(|mod_| {
-            if side == ModSide::All {
-                true
-            } else {
-                mod_.side == side || mod_.side == ModSide::All
-            }
-        })
-        .collect();
+    let mods: Vec<Mod>;
+    if side == ModSide::All {
+        mods = pack.mods;
+    } else {
+        mods = pack
+            .mods
+            .into_iter()
+            .filter(|mod_| {
+                if side == ModSide::All {
+                    true
+                } else {
+                    mod_.side == side || mod_.side == ModSide::All
+                }
+            })
+            .collect();
+    }
     let mut to_download: Vec<Downloadable> = Vec::new();
     for mod_ in mods.iter() {
         let files = furse.get_mod_files(mod_.id.try_into()?).await?;
