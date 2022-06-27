@@ -68,7 +68,7 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: HashMap<String, u32>, side: ModSide) {
         let mod_ = Mod {
             name: name.to_string(),
             id: *id,
-            side: ModSide::All,
+            side: side.clone(),
         };
         if mods.contains(&mod_) {
             warn!("Found duplicate mod: {}, id: {}", name, id);

@@ -1,7 +1,15 @@
-use crate::toml::Pack;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use url::Url;
 
+#[derive(Default, Serialize, Deserialize, Debug)]
 pub struct Config {
-    pub mod_dir: PathBuf,
-    pub last_pack: Option<Pack>,
+    pub mod_dir: Option<PathBuf>,
+    pub source: Option<PathOrUrl>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum PathOrUrl {
+    Path(PathBuf),
+    Url(Url),
 }

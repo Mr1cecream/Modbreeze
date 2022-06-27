@@ -1,4 +1,4 @@
-use crate::{errors::BreezeError, toml::Pack, Mod, ModSide};
+use crate::{errors::BreezeError, toml::Pack, ModSide};
 use anyhow::Result;
 use fs_extra::file::{move_file, CopyOptions as FileCopyOptions};
 use furse::Furse;
@@ -21,22 +21,14 @@ use tokio::{
 pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Downloadable>> {
     let api_key = env!("CF_API_KEY");
     let furse = Furse::new(api_key);
-    let mods: Vec<Mod>;
-    if side == ModSide::All {
-        mods = pack.mods;
+    let mods = if side == ModSide::All {
+        pack.mods
     } else {
-        mods = pack
-            .mods
+        pack.mods
             .into_iter()
-            .filter(|mod_| {
-                if side == ModSide::All {
-                    true
-                } else {
-                    mod_.side == side || mod_.side == ModSide::All
-                }
-            })
-            .collect();
-    }
+            .filter(|mod_| mod_.side == side || mod_.side == ModSide::All)
+            .collect()
+    };
     let mut to_download: Vec<Downloadable> = Vec::new();
     for mod_ in mods.iter() {
         let files = furse.get_mod_files(mod_.id.try_into()?).await?;
@@ -71,7 +63,7 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
 }
 
 pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) -> Result<()> {
-    create_dir_all(&*output_dir).await?;
+    create_dir_all(&*output_dir.join("mods")).await?;
     let mut tasks = Vec::new();
     let semaphore = Arc::new(Semaphore::new(75));
     for downloadable in to_download {
@@ -93,7 +85,7 @@ pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) 
 /// If there are files that are not in `to_download`, they will be removed
 /// If a file in `to_download` is already there, it will be removed from the Vec
 /// If a file is a `.part` file or the move failed, the file will be deleted
-async fn clean(directory: &Path, to_download: &mut Vec<Downloadable>) -> Result<()> {
+pub async fn clean(directory: &Path, to_download: &mut Vec<Downloadable>) -> Result<()> {
     let dupes = find_dupes_by_key(to_download, Downloadable::filename);
     if !dupes.is_empty() {
         warn!(
