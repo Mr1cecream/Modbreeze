@@ -65,19 +65,6 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: HashMap<String, u32>, side: ModSide) {
         ModSide::Client => "client",
         ModSide::Server => "server",
     };
-    // for (name, id) in raw.iter() {
-    // let mod_ = Mod {
-    // name: name.to_string(),
-    // id: *id,
-    // side: side.clone(),
-    // };
-    // if mods.contains(&mod_) {
-    // warn!("Found duplicate mod: {}, id: {}", name, id);
-    // continue;
-    // }
-    // mods.push(mod_);
-    // info!("Adding {} mod: {}, id: {}", msg, name, id);
-    // }
     let new: Vec<Mod> = raw
         .par_iter()
         .map(|(name, id)| Mod {
