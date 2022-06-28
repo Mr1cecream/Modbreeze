@@ -3,6 +3,7 @@ use crate::{Mod, ModSide};
 use anyhow::Result;
 use libium::config::structs::ModLoader;
 use log::{info, warn};
+use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -64,18 +65,38 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: HashMap<String, u32>, side: ModSide) {
         ModSide::Client => "client",
         ModSide::Server => "server",
     };
-    for (name, id) in raw.iter() {
-        let mod_ = Mod {
+    // for (name, id) in raw.iter() {
+    // let mod_ = Mod {
+    // name: name.to_string(),
+    // id: *id,
+    // side: side.clone(),
+    // };
+    // if mods.contains(&mod_) {
+    // warn!("Found duplicate mod: {}, id: {}", name, id);
+    // continue;
+    // }
+    // mods.push(mod_);
+    // info!("Adding {} mod: {}, id: {}", msg, name, id);
+    // }
+    let new: Vec<Mod> = raw
+        .par_iter()
+        .map(|(name, id)| Mod {
             name: name.to_string(),
             id: *id,
             side: side.clone(),
-        };
-        if mods.contains(&mod_) {
-            warn!("Found duplicate mod: {}, id: {}", name, id);
-            continue;
-        }
+        })
+        .filter(|mod_| {
+            if mods.contains(mod_) {
+                warn!("Found duplicate mod: {}, id: {}", mod_.name, mod_.id);
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
+    for mod_ in new {
+        info!("Adding {} mod: {}, id: {}", msg, mod_.name, mod_.id);
         mods.push(mod_);
-        info!("Adding {} mod: {}, id: {}", msg, name, id);
     }
 }
 

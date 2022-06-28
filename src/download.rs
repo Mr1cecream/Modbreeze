@@ -5,6 +5,7 @@ use furse::Furse;
 use itertools::Itertools;
 use libium::upgrade::{mod_downloadable, Downloadable};
 use log::warn;
+use rayon::prelude::*;
 use std::{
     fs::read_dir,
     path::{Path, PathBuf},
@@ -25,7 +26,7 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
         pack.mods
     } else {
         pack.mods
-            .into_iter()
+            .into_par_iter()
             .filter(|mod_| mod_.side == side || mod_.side == ModSide::All)
             .collect()
     };
