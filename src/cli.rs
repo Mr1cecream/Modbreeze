@@ -29,7 +29,7 @@ enum Commands {
     },
     /// Configure the CLI
     Config {
-        /// Mod output directory
+        /// Minecraft directory
         #[clap(short, long, value_parser, value_name = "DIR")]
         dir: PathBuf,
     },
@@ -43,7 +43,7 @@ enum Commands {
         /// URL to TOML with modpack definition
         #[clap(short, long, value_parser, value_name = "URL")]
         url: Option<Url>,
-        /// Mod output directory
+        /// Minecraft directory
         #[clap(short, long, value_parser, value_name = "DIR")]
         dir: Option<PathBuf>,
     },
@@ -67,8 +67,7 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             if !dir.exists() {
                 tokio::fs::create_dir_all(&dir).await?;
             }
-            config.mod_dir = Some(fs::canonicalize(dir)?);
-
+            config.out_dir = Some(fs::canonicalize(dir)?);
         }
         Commands::Upgrade {
             side,
@@ -90,15 +89,15 @@ pub async fn cli(config: &mut Config) -> Result<()> {
                     return Err(CliError::NoSourceSpecified.into());
                 }
             };
-            // Get mod output directory
+            // Get Minecraft directory
             let mod_dir = if let Some(dir) = dir {
                 if !dir.exists() {
                     tokio::fs::create_dir_all(&dir).await?;
                 }
-                config.mod_dir = Some(fs::canonicalize(&dir)?);
+                config.out_dir = Some(fs::canonicalize(&dir)?);
                 dir
             } else {
-                if let Some(mod_dir) = config.mod_dir.clone() {
+                if let Some(mod_dir) = config.out_dir.clone() {
                     mod_dir
                 } else {
                     return Err(CliError::NoModDirSpecified.into());
@@ -128,7 +127,7 @@ pub async fn cli(config: &mut Config) -> Result<()> {
 enum CliError {
     #[error("no file or path was specified")]
     NoSourceSpecified,
-    #[error("no mod output directory was specified")]
+    #[error("no Minecraft directory was specified")]
     NoModDirSpecified,
     #[error("expected plain text from URL response, got {0}. check the specified URL")]
     NonPlainTextResponse(String),

@@ -12,7 +12,7 @@ mod download;
 mod errors;
 mod toml;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Mod {
     name: String,
     id: u32,
@@ -30,7 +30,7 @@ pub enum ModSide {
 async fn main() {
     let res = actual_main().await;
     if let Err(e) = res {
-        println!("{}", e);
+        eprintln!("{}", e);
     }
 }
 
