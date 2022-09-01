@@ -8,6 +8,7 @@ use log::info;
 use std::{fs, path::PathBuf, sync::Arc};
 use thiserror::Error;
 use url::Url;
+use promptly::prompt;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -54,10 +55,8 @@ pub async fn cli(config: &mut Config) -> Result<()> {
 
     match cli.command {
         Commands::Source { file, url } => {
-            if let Some(file) = file {
-                config.source = Some(PathOrUrl::Path(fs::canonicalize(file)?));
-            } else if let Some(url) = url {
-                config.source = Some(PathOrUrl::Url(url));
+            if let Some(source) = get_source(file, url)? {
+                config.source = Some(source);
             } else {
                 return Err(CliError::NoSourceSpecified.into());
             }
@@ -67,7 +66,7 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             if !dir.exists() {
                 tokio::fs::create_dir_all(&dir).await?;
             }
-            config.out_dir = Some(fs::canonicalize(dir)?);
+            config.mc_dir = Some(fs::canonicalize(dir)?);
         }
         Commands::Upgrade {
             side,
@@ -76,12 +75,9 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             dir,
         } => {
             // Get TOML source
-            let source: PathOrUrl = if let Some(file) = file {
-                config.source = Some(PathOrUrl::Path(fs::canonicalize(&file)?));
-                PathOrUrl::Path(file)
-            } else if let Some(url) = url {
-                config.source = Some(PathOrUrl::Url(url.clone()));
-                PathOrUrl::Url(url)
+            let source: PathOrUrl = if let Some(source) = get_source(file, url)? {
+                config.source = Some(source.clone());
+                source
             } else {
                 if let Some(source) = config.source.clone() {
                     source
@@ -90,17 +86,26 @@ pub async fn cli(config: &mut Config) -> Result<()> {
                 }
             };
             // Get Minecraft directory
-            let mod_dir = if let Some(dir) = dir {
+            let mc_dir = if let Some(dir) = dir {
+                info!("Setting Minecraft Directory: {:?}", dir);
                 if !dir.exists() {
                     tokio::fs::create_dir_all(&dir).await?;
                 }
-                config.out_dir = Some(fs::canonicalize(&dir)?);
+                config.mc_dir = Some(fs::canonicalize(&dir)?);
                 dir
             } else {
-                if let Some(mod_dir) = config.out_dir.clone() {
-                    mod_dir
+                if let Some(mc_dir) = config.mc_dir.clone() {
+                    info!("Found Minecraft Directory in Config: {:?}", mc_dir);
+                    mc_dir
                 } else {
-                    return Err(CliError::NoModDirSpecified.into());
+                    let dir : PathBuf = prompt("Minecraft Directory")?;
+                    info!("Setting Minecraft Directory: {:?}", dir);
+
+                    if !dir.exists() {
+                        tokio::fs::create_dir_all(&dir).await?;
+                    }
+                    config.mc_dir = Some(fs::canonicalize(&dir)?);
+                    dir
                 }
             };
             // Get TOML contents
@@ -116,8 +121,8 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             };
             let pack = crate::toml::parse(toml)?;
             let mut to_download = download::get_downloadables(side, pack).await?;
-            download::clean(&mod_dir, &mut to_download).await?;
-            download::download(Arc::new(mod_dir), to_download).await?;
+            download::clean(&mc_dir, &mut to_download).await?;
+            download::download(Arc::new(mc_dir), to_download).await?;
         }
     };
     Ok(())
@@ -127,8 +132,18 @@ pub async fn cli(config: &mut Config) -> Result<()> {
 enum CliError {
     #[error("no file or path was specified")]
     NoSourceSpecified,
-    #[error("no Minecraft directory was specified")]
-    NoModDirSpecified,
+    // #[error("no Minecraft directory was specified")]
+    // NoModDirSpecified,
     #[error("expected plain text from URL response, got {0}. check the specified URL")]
     NonPlainTextResponse(String),
+}
+
+fn get_source(file: Option<PathBuf>, url: Option<Url>) -> Result<Option<PathOrUrl>> {
+    if let Some(file) = file {
+        Ok(Some(PathOrUrl::Path(fs::canonicalize(&file)?)))
+    } else if let Some(url) = url {
+        Ok(Some(PathOrUrl::Url(url)))
+    } else {
+        Ok(None)
+    }
 }
