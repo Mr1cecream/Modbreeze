@@ -37,6 +37,7 @@ ureq = "2.4.0"
 serde_json = "1.0.81"
 dirs = "4.0.0"
 rayon = "1.5.3"
+promptly = "0.3.1"
 
 [profile.release]
 strip = true

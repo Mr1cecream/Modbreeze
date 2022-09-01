@@ -4,7 +4,7 @@ use url::Url;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct Config {
-    pub out_dir: Option<PathBuf>,
+    pub mc_dir: Option<PathBuf>,
     pub source: Option<PathOrUrl>,
 }
 

@@ -35,8 +35,8 @@ async fn main() {
 }
 
 async fn actual_main() -> Result<()> {
-    setup_logging(false)?;
     let config_path = get_config_file_path()?;
+    setup_logging(&config_path, false)?;
     let mut config = if Path::new(&config_path).exists() {
         load_config(&config_path)?
     } else {
@@ -49,7 +49,7 @@ async fn actual_main() -> Result<()> {
     Ok(())
 }
 
-fn setup_logging(verbose: bool) -> Result<()> {
+fn setup_logging(path: &Path, verbose: bool) -> Result<()> {
     fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
@@ -66,7 +66,11 @@ fn setup_logging(verbose: bool) -> Result<()> {
                 .write(true)
                 .create(true)
                 .truncate(true)
-                .open("latest.log")?,
+                .open(if let Some(parent) = path.parent() {
+                    parent.join("latest.log")
+                } else {
+                    Path::new("latest.log").to_path_buf()  
+                })?,
         )
         .chain(
             fern::Dispatch::new()
