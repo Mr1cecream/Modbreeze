@@ -4,10 +4,12 @@ loader = "fabric"
 mc_version = "1.18.2"
 
 [mods.client]
-rubidium = { id = 574856, ignore_loader = true }
+# rubidium = { id = 574856, ignore_loader = true }
+rubidium = 574856
 
 [mods.server]
 terralith = 513688
 
 [mods.all]
-cctweaked = { id = 282001, ignore_loader = true }
+# cctweaked = { id = 282001, ignore_loader = true }
+cctweaked = 282001

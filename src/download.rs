@@ -1,7 +1,7 @@
 use crate::{errors::BreezeError, toml::Pack, ModSide};
 use anyhow::Result;
 use fs_extra::file::{move_file, CopyOptions as FileCopyOptions};
-use furse::Furse;
+use furse::{Furse, structures::file_structs::File};
 use itertools::Itertools;
 use libium::upgrade::{mod_downloadable, Downloadable};
 use log::{warn, error};
@@ -31,10 +31,21 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
             .collect()
     };
     let mut to_download: Vec<Downloadable> = Vec::new();
-    for mod_ in mods.iter() { // TODO: Parallelize via rayon
-        let files = furse.get_mod_files(mod_.id.try_into()?).await?;
+    let mut futures = Vec::new();
+    for mod_ in mods.iter() {
+        futures.push(furse.get_mod_files(mod_.id.try_into()?));
+    }
+    let files = futures::future::join_all(futures).await;
+    files.par_iter().for_each(|files| match files {
+        Err(err) => error!("{}", err),
+        _ => ()
+    });
+    let files: Vec<Vec<File>> = files.into_iter().filter(|files| files.is_ok()).map(|files| files.unwrap()).collect();
+    for i in 0..mods.len() {
+        let mod_ = &mods[i];
+        let files = &files[i];
         let downloadable = mod_downloadable::get_latest_compatible_file(
-            files,
+            files.to_vec(),
             &pack.mc_version,
             &pack.loader,
             Some(!mod_.ignore_version),
