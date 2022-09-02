@@ -27,9 +27,20 @@ struct Data {
 
 #[derive(Deserialize)]
 struct Mods {
-    client: HashMap<String, u32>,
-    server: HashMap<String, u32>,
-    all: HashMap<String, u32>,
+    client: HashMap<String, TomlMod>,
+    server: HashMap<String, TomlMod>,
+    all: HashMap<String, TomlMod>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum TomlMod {
+    Id(u32),
+    Tabled {
+        id: u32,
+        ignore_loader: Option<bool>,
+        ignore_version: Option<bool>,
+    }
 }
 
 impl TryFrom<Data> for Pack {
@@ -59,7 +70,7 @@ impl TryFrom<Data> for Pack {
     }
 }
 
-fn convert_mods(mods: &mut Vec<Mod>, raw: HashMap<String, u32>, side: ModSide) {
+fn convert_mods(mods: &mut Vec<Mod>, raw: HashMap<String, TomlMod>, side: ModSide) {
     let msg = match side {
         ModSide::All => "general",
         ModSide::Client => "client",
@@ -67,11 +78,20 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: HashMap<String, u32>, side: ModSide) {
     };
     let new: Vec<Mod> = raw
         .par_iter()
-        .map(|(name, id)| Mod {
-            name: name.to_string(),
-            id: *id,
-            side: side.clone(),
-        })
+        .map(|(name, id)| {
+            let name = name.to_string();
+            let side = side.clone();
+            let ( id, ignore_loader, ignore_version) = match id {
+                TomlMod::Id(id) => ( id, false, false),
+                TomlMod::Tabled { id, ignore_loader, ignore_version } => (id, ignore_loader.unwrap_or(false), ignore_version.unwrap_or(false)),
+            };
+            Mod {
+                name,
+                id: *id,
+                side,
+                ignore_loader,
+                ignore_version,
+        }})
         .filter(|mod_| {
             if mods.contains(mod_) {
                 warn!("Found duplicate mod: {}, id: {}", mod_.name, mod_.id);

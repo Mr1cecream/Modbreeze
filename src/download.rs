@@ -4,7 +4,7 @@ use fs_extra::file::{move_file, CopyOptions as FileCopyOptions};
 use furse::Furse;
 use itertools::Itertools;
 use libium::upgrade::{mod_downloadable, Downloadable};
-use log::warn;
+use log::{warn, error};
 use rayon::prelude::*;
 use std::{
     fs::read_dir,
@@ -31,17 +31,17 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
             .collect()
     };
     let mut to_download: Vec<Downloadable> = Vec::new();
-    for mod_ in mods.iter() {
+    for mod_ in mods.iter() { // TODO: Parallelize via rayon
         let files = furse.get_mod_files(mod_.id.try_into()?).await?;
-        let downloadable: Downloadable = mod_downloadable::get_latest_compatible_file(
+        let downloadable = mod_downloadable::get_latest_compatible_file(
             files,
             &pack.mc_version,
             &pack.loader,
-            Some(true),
-            Some(true),
+            Some(!mod_.ignore_version),
+            Some(!mod_.ignore_loader),
         )
         .map_or_else(
-            || Err(BreezeError::NoCompatFile),
+            || Err(BreezeError::NoCompatFile(mod_.name.clone(), mod_.id.clone())),
             |ok| {
                 Ok(Downloadable {
                     download_url: ok
@@ -57,8 +57,11 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
                     size: Some(ok.0.file_length as u64),
                 })
             },
-        )?;
-        to_download.push(downloadable);
+        );
+        match downloadable {
+            Ok(ok) => to_download.push(ok),
+            Err(err) => error!("{}", err)
+        }
     }
     Ok(to_download)
 }
