@@ -1,13 +1,13 @@
 name = "My Modpack"
 version = "1.0.0"
-loader = "forge"
+loader = "fabric"
 mc_version = "1.18.2"
 
 [mods.client]
-rubidium = 574856
+rubidium = { id = 574856, ignore_loader = true }
 
 [mods.server]
 terralith = 513688
 
 [mods.all]
-cctweaked = 282001
+cctweaked = { id = 282001, ignore_loader = true }

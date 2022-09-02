@@ -17,6 +17,8 @@ pub struct Mod {
     name: String,
     id: u32,
     side: ModSide,
+    ignore_loader: bool,
+    ignore_version: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, ArgEnum, Clone)]
