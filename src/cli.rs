@@ -121,7 +121,7 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             };
             let pack = crate::toml::parse(toml)?;
             let mut to_download = download::get_downloadables(side, pack).await?;
-            download::clean(&mc_dir, &mut to_download).await?;
+            download::clean(&mc_dir.join("mods"), &mut to_download).await?;
             download::download(Arc::new(mc_dir), to_download).await?;
         }
     };
