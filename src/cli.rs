@@ -30,7 +30,7 @@ enum Commands {
     },
     /// Configure the CLI
     Config {
-        /// Minecraft directory
+        /// Minecraft root directory
         #[clap(short, long, value_parser, value_name = "DIR")]
         dir: PathBuf,
     },
@@ -44,7 +44,7 @@ enum Commands {
         /// URL to TOML with modpack definition
         #[clap(short, long, value_parser, value_name = "URL")]
         url: Option<Url>,
-        /// Minecraft directory
+        /// Minecraft root directory
         #[clap(short, long, value_parser, value_name = "DIR")]
         dir: Option<PathBuf>,
     },
@@ -98,7 +98,7 @@ pub async fn cli(config: &mut Config) -> Result<()> {
                     info!("Found Minecraft Directory in Config: {:?}", mc_dir);
                     mc_dir
                 } else {
-                    let dir: PathBuf = prompt("Minecraft Directory")?;
+                    let dir: PathBuf = prompt("Minecraft Root Directory")?;
                     info!("Setting Minecraft Directory: {:?}", dir);
 
                     if !dir.exists() {
