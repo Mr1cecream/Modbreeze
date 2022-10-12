@@ -71,7 +71,7 @@ fn setup_logging(path: &Path, verbose: bool) -> Result<()> {
                 .open(if let Some(parent) = path.parent() {
                     parent.join("latest.log")
                 } else {
-                    Path::new("latest.log").to_path_buf()  
+                    Path::new("latest.log").to_path_buf()
                 })?,
         )
         .chain(
