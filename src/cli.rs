@@ -5,10 +5,10 @@ use crate::{
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::info;
+use promptly::prompt;
 use std::{fs, path::PathBuf, sync::Arc};
 use thiserror::Error;
 use url::Url;
-use promptly::prompt;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -98,7 +98,7 @@ pub async fn cli(config: &mut Config) -> Result<()> {
                     info!("Found Minecraft Directory in Config: {:?}", mc_dir);
                     mc_dir
                 } else {
-                    let dir : PathBuf = prompt("Minecraft Directory")?;
+                    let dir: PathBuf = prompt("Minecraft Directory")?;
                     info!("Setting Minecraft Directory: {:?}", dir);
 
                     if !dir.exists() {

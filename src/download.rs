@@ -1,10 +1,10 @@
 use crate::{errors::BreezeError, toml::Pack, ModSide};
 use anyhow::Result;
 use fs_extra::file::{move_file, CopyOptions as FileCopyOptions};
-use furse::{Furse, structures::file_structs::File};
+use furse::{structures::file_structs::File, Furse};
 use itertools::Itertools;
 use libium::upgrade::{mod_downloadable, Downloadable};
-use log::{warn, error};
+use log::{error, warn};
 use rayon::prelude::*;
 use std::{
     fs::read_dir,
@@ -38,9 +38,13 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
     let files = futures::future::join_all(futures).await;
     files.par_iter().for_each(|files| match files {
         Err(err) => error!("{}", err),
-        _ => ()
+        _ => (),
     });
-    let files: Vec<Vec<File>> = files.into_iter().filter(|files| files.is_ok()).map(|files| files.unwrap()).collect();
+    let files: Vec<Vec<File>> = files
+        .into_iter()
+        .filter(|files| files.is_ok())
+        .map(|files| files.unwrap())
+        .collect();
     for i in 0..mods.len() {
         let mod_ = &mods[i];
         let files = &files[i];
@@ -52,7 +56,12 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
             Some(!mod_.ignore_loader),
         )
         .map_or_else(
-            || Err(BreezeError::NoCompatFile(mod_.name.clone(), mod_.id.clone())),
+            || {
+                Err(BreezeError::NoCompatFile(
+                    mod_.name.clone(),
+                    mod_.id.clone(),
+                ))
+            },
             |ok| {
                 Ok(Downloadable {
                     download_url: ok
@@ -71,7 +80,7 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
         );
         match downloadable {
             Ok(ok) => to_download.push(ok),
-            Err(err) => error!("{}", err)
+            Err(err) => error!("{}", err),
         }
     }
     Ok(to_download)
@@ -104,12 +113,15 @@ pub async fn clean(directory: &Path, to_download: &mut Vec<Downloadable>) -> Res
     let dupes = find_dupes_by_key(to_download, Downloadable::filename);
     if !dupes.is_empty() {
         warn!(
-            "{} duplicate files were found: {}",
-            dupes.len(),
-            dupes
-                .into_iter()
-                .map(|i| to_download.swap_remove(i).filename())
-                .format(", ")
+            "{}",
+            format!(
+                "{} duplicate files were found: {}",
+                dupes.len(),
+                dupes
+                    .into_iter()
+                    .map(|i| to_download.swap_remove(i).filename())
+                    .format(", ")
+            )
         );
     }
     create_dir_all(directory.join(".old")).await?;

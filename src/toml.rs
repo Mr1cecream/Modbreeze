@@ -40,7 +40,7 @@ enum TomlMod {
         id: u32,
         ignore_loader: Option<bool>,
         ignore_version: Option<bool>,
-    }
+    },
 }
 
 impl TryFrom<Data> for Pack {
@@ -81,9 +81,17 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: HashMap<String, TomlMod>, side: ModSid
         .map(|(name, id)| {
             let name = name.to_string();
             let side = side.clone();
-            let ( id, ignore_loader, ignore_version) = match id {
-                TomlMod::Id(id) => ( id, false, false),
-                TomlMod::Tabled { id, ignore_loader, ignore_version } => (id, ignore_loader.unwrap_or(false), ignore_version.unwrap_or(false)),
+            let (id, ignore_loader, ignore_version) = match id {
+                TomlMod::Id(id) => (id, false, false),
+                TomlMod::Tabled {
+                    id,
+                    ignore_loader,
+                    ignore_version,
+                } => (
+                    id,
+                    ignore_loader.unwrap_or(false),
+                    ignore_version.unwrap_or(false),
+                ),
             };
             Mod {
                 name,
@@ -91,7 +99,8 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: HashMap<String, TomlMod>, side: ModSid
                 side,
                 ignore_loader,
                 ignore_version,
-        }})
+            }
+        })
         .filter(|mod_| {
             if mods.contains(mod_) {
                 warn!("Found duplicate mod: {}, id: {}", mod_.name, mod_.id);
