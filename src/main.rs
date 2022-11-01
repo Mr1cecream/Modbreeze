@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::clap_derive::ArgEnum;
+use clap::clap_derive::ValueEnum;
 use config::Config;
 use std::{
     io::prelude::Write,
@@ -27,7 +27,7 @@ impl PartialEq for Mod {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, ArgEnum, Clone)]
+#[derive(Debug, PartialEq, Eq, ValueEnum, Clone)]
 pub enum ModSide {
     Client,
     Server,

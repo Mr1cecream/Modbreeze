@@ -36,7 +36,7 @@ enum Commands {
     },
     /// Upgrade mods
     Upgrade {
-        #[clap(short, long, value_parser, arg_enum, value_name = "SIDE")]
+        #[clap(short, long, value_parser, value_enum, value_name = "SIDE")]
         side: ModSide,
         /// TOML file with modpack definition
         #[clap(short, long, value_parser, value_name = "FILE")]
@@ -146,4 +146,10 @@ fn get_source(file: Option<PathBuf>, url: Option<Url>) -> Result<Option<PathOrUr
     } else {
         Ok(None)
     }
+}
+
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    Cli::command().debug_assert()
 }
