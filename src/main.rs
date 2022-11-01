@@ -12,13 +12,19 @@ mod download;
 mod errors;
 mod toml;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Mod {
     name: String,
     id: u32,
     side: ModSide,
     ignore_loader: bool,
     ignore_version: bool,
+}
+
+impl PartialEq for Mod {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, ArgEnum, Clone)]
