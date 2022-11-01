@@ -29,7 +29,7 @@ struct Data {
 struct Mods {
     client: Option<HashMap<String, TomlMod>>,
     server: Option<HashMap<String, TomlMod>>,
-    all: Option<HashMap<String, TomlMod>>,
+    common: Option<HashMap<String, TomlMod>>,
 }
 
 #[derive(Deserialize)]
@@ -58,7 +58,7 @@ impl TryFrom<Data> for Pack {
         let mut mods: Vec<Mod> = Vec::new();
         convert_mods(&mut mods, data.mods.client, ModSide::Client);
         convert_mods(&mut mods, data.mods.server, ModSide::Server);
-        convert_mods(&mut mods, data.mods.all, ModSide::All);
+        convert_mods(&mut mods, data.mods.common, ModSide::All);
         
         if mods.is_empty() {
             return Err(BreezeError::EmptyPack.into());
@@ -80,7 +80,7 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: Option<HashMap<String, TomlMod>>, side
     }
     let raw = raw.unwrap();
     let msg = match side {
-        ModSide::All => "general",
+        ModSide::All => "common",
         ModSide::Client => "client",
         ModSide::Server => "server",
     };
