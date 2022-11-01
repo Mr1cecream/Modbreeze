@@ -59,7 +59,7 @@ impl TryFrom<Data> for Pack {
         convert_mods(&mut mods, data.mods.client, ModSide::Client);
         convert_mods(&mut mods, data.mods.server, ModSide::Server);
         convert_mods(&mut mods, data.mods.common, ModSide::All);
-        
+
         if mods.is_empty() {
             return Err(BreezeError::EmptyPack.into());
         }

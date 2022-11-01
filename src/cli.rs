@@ -37,7 +37,7 @@ enum Commands {
     /// Upgrade mods
     Upgrade {
         #[clap(short, long, value_parser, value_enum, value_name = "SIDE")]
-        side: ModSide,
+        side: Option<ModSide>,
         /// TOML file with modpack definition
         #[clap(short, long, value_parser, value_name = "FILE")]
         file: Option<PathBuf>,
@@ -107,6 +107,12 @@ pub async fn cli(config: &mut Config) -> Result<()> {
                     config.mc_dir = Some(fs::canonicalize(&dir)?);
                     dir
                 }
+            };
+            let side = if let Some(side) = side {
+                config.side = Some(side.clone());
+                side
+            } else {
+                config.side.clone().unwrap_or(ModSide::Client)
             };
             // Get TOML contents
             let toml = match source {
