@@ -32,10 +32,14 @@ enum Commands {
     Config {
         /// Minecraft root directory
         #[clap(short, long, value_parser, value_name = "DIR")]
-        dir: PathBuf,
+        dir: Option<PathBuf>,
+        /// Which types of mods to download
+        #[clap(short, long, value_parser, value_enum, value_name = "SIDE")]
+        side: Option<ModSide>,
     },
     /// Upgrade mods
     Upgrade {
+        /// Which types of mods to download
         #[clap(short, long, value_parser, value_enum, value_name = "SIDE")]
         side: Option<ModSide>,
         /// TOML file with modpack definition
@@ -62,11 +66,16 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             }
             info!("Setting source to {:?}", config.source);
         }
-        Commands::Config { dir } => {
-            if !dir.exists() {
-                tokio::fs::create_dir_all(&dir).await?;
+        Commands::Config { dir, side } => {
+            if let Some(dir) = dir {
+                if !dir.exists() {
+                    tokio::fs::create_dir_all(&dir).await?;
+                }
+                config.mc_dir = Some(fs::canonicalize(dir)?);
             }
-            config.mc_dir = Some(fs::canonicalize(dir)?);
+            if let Some(side) = side {
+                config.side = Some(side);
+            }
         }
         Commands::Upgrade {
             side,
