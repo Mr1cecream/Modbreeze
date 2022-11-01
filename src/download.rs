@@ -1,10 +1,17 @@
-use crate::{errors::BreezeError, toml::Pack, ModSide};
+use crate::{errors::BreezeError, toml::Pack, Mod, ModSide};
 use anyhow::Result;
+use async_recursion::async_recursion;
 use fs_extra::file::{move_file, CopyOptions as FileCopyOptions};
-use furse::{structures::file_structs::File, Furse};
+use furse::{
+    structures::file_structs::{File, FileRelationType},
+    Furse,
+};
 use itertools::Itertools;
-use libium::upgrade::{mod_downloadable, Downloadable};
-use log::{error, warn};
+use libium::{
+    config::structs::ModLoader,
+    upgrade::{mod_downloadable, Downloadable},
+};
+use log::{error, info};
 use rayon::prelude::*;
 use std::{
     fs::read_dir,
@@ -30,59 +37,99 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
             .filter(|mod_| mod_.side == side || mod_.side == ModSide::All)
             .collect()
     };
+
     let mut to_download: Vec<Downloadable> = Vec::new();
-    let mut futures = Vec::new();
-    for mod_ in mods.iter() {
-        futures.push(furse.get_mod_files(mod_.id.try_into()?));
-    }
-    let files = futures::future::join_all(futures).await;
-    files.par_iter().for_each(|files| match files {
-        Err(err) => error!("{}", err),
-        _ => (),
-    });
-    let files: Vec<Vec<File>> = files
-        .into_iter()
-        .filter(|files| files.is_ok())
-        .map(|files| files.unwrap())
-        .collect();
-    for i in 0..mods.len() {
-        let mod_ = &mods[i];
-        let files = &files[i];
-        let downloadable = mod_downloadable::get_latest_compatible_file(
-            files.to_vec(),
-            &pack.mc_version,
-            &pack.loader,
-            Some(!mod_.ignore_version),
-            Some(!mod_.ignore_loader),
-        )
-        .map_or_else(
-            || {
-                Err(BreezeError::NoCompatFile(
-                    mod_.name.clone(),
-                    mod_.id.clone(),
-                ))
-            },
-            |ok| {
-                Ok(Downloadable {
-                    download_url: ok
-                        .0
-                        .download_url
-                        .ok_or(BreezeError::DistributionDenied(mod_.name.clone(), mod_.id))?,
-                    output: PathBuf::from(if ok.0.file_name.ends_with(".zip") {
-                        "resourcepacks"
-                    } else {
-                        "mods"
-                    })
-                    .join(ok.0.file_name),
-                    size: Some(ok.0.file_length as u64),
-                })
-            },
-        );
-        match downloadable {
-            Ok(ok) => to_download.push(ok),
-            Err(err) => error!("{}", err),
+    #[async_recursion]
+    async fn inner(
+        mods: Vec<Mod>,
+        furse: &Furse,
+        mc_version: &str,
+        loader: &ModLoader,
+        to_download: &mut Vec<Downloadable>,
+    ) -> Result<()> {
+        let mut futures = Vec::new();
+        for mod_ in mods.iter() {
+            futures.push(furse.get_mod_files(mod_.id.try_into()?));
         }
+        let files = futures::future::join_all(futures).await;
+        files.par_iter().for_each(|files| match files {
+            Err(err) => error!("{}", err),
+            _ => (),
+        });
+        let files: Vec<Vec<File>> = files
+            .into_iter()
+            .filter(|files| files.is_ok())
+            .map(|files| files.unwrap())
+            .collect();
+        let mut dependencies: Vec<Mod> = Vec::new();
+        for i in 0..mods.len() {
+            let mod_ = &mods[i];
+            let files = &files[i];
+            let downloadable = mod_downloadable::get_latest_compatible_file(
+                files.to_vec(),
+                mc_version,
+                loader,
+                Some(!mod_.ignore_version),
+                Some(!mod_.ignore_loader),
+            )
+            .map_or_else(
+                || {
+                    Err(BreezeError::NoCompatFile(
+                        mod_.name.clone(),
+                        mod_.id.clone(),
+                    ))
+                },
+                |ok| {
+                    let dependencies_: Vec<Mod> =
+                        ok.0.dependencies
+                            .into_iter()
+                            .filter(|d| d.relation_type == FileRelationType::RequiredDependency)
+                            .map(|d| Mod {
+                                name: format!("Dependency of {}", &mod_.name),
+                                id: d.mod_id as u32,
+                                ignore_loader: false,
+                                ignore_version: false,
+                                side: ModSide::All,
+                            })
+                            .collect();
+                    dependencies_.into_iter().for_each(|d| {
+                        if !dependencies.contains(&d) {
+                            dependencies.push(d);
+                        }
+                    });
+                    Ok(Downloadable {
+                        download_url: ok
+                            .0
+                            .download_url
+                            .ok_or(BreezeError::DistributionDenied(mod_.name.clone(), mod_.id))?,
+                        output: PathBuf::from(if ok.0.file_name.ends_with(".zip") {
+                            "resourcepacks"
+                        } else {
+                            "mods"
+                        })
+                        .join(ok.0.file_name),
+                        size: Some(ok.0.file_length as u64),
+                    })
+                },
+            );
+            match downloadable {
+                Ok(ok) => to_download.push(ok),
+                Err(err) => error!("{}", err),
+            }
+        }
+        if !dependencies.is_empty() {
+            inner(dependencies, furse, mc_version, loader, to_download).await?;
+        }
+        Ok(())
     }
+    inner(
+        mods,
+        &furse,
+        &pack.mc_version,
+        &pack.loader,
+        &mut to_download,
+    )
+    .await?;
     Ok(to_download)
 }
 
@@ -112,7 +159,7 @@ pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) 
 pub async fn clean(directory: &Path, to_download: &mut Vec<Downloadable>) -> Result<()> {
     let dupes = find_dupes_by_key(to_download, Downloadable::filename);
     if !dupes.is_empty() {
-        warn!(
+        info!(
             "{}",
             format!(
                 "{} duplicate files were found: {}",
