@@ -4,9 +4,10 @@ use crate::{
 };
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use indicatif::{ProgressBar, ProgressStyle};
 use log::info;
 use promptly::prompt;
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 use thiserror::Error;
 use url::Url;
 
@@ -123,6 +124,8 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             } else {
                 config.side.clone().unwrap_or(ModSide::Client)
             };
+
+            let progress_bar = create_spinner("Parsing pack", "Finished parsing pack.");
             // Get TOML contents
             let toml = match source {
                 PathOrUrl::Path(path) => std::fs::read_to_string(path)?,
@@ -135,8 +138,16 @@ pub async fn cli(config: &mut Config) -> Result<()> {
                 }
             };
             let pack = crate::toml::parse(toml)?;
+            progress_bar.finish();
+
+            let progress_bar = create_spinner("Fetching mods", "Finished fetching mods.");
             let mut to_download = download::get_downloadables(side, pack).await?;
+            progress_bar.finish();
+
+            let progress_bar = create_spinner("Cleaning old mods", "Finished cleaning old mods.");
             download::clean(&mc_dir.join("mods"), &mut to_download).await?;
+            progress_bar.finish();
+
             download::download(Arc::new(mc_dir), to_download).await?;
         }
     };
@@ -161,6 +172,21 @@ fn get_source(file: Option<PathBuf>, url: Option<Url>) -> Result<Option<PathOrUr
     } else {
         Ok(None)
     }
+}
+
+fn create_spinner(msg: &str, finish: &str) -> ProgressBar {
+    let progress_bar = ProgressBar::new_spinner().with_style(
+        ProgressStyle::with_template("{spinner:.green}")
+            .unwrap()
+            .tick_strings(&[
+                format!("{}{}", msg, ".").as_str(),
+                format!("{}{}", msg, "..").as_str(),
+                format!("{}{}", msg, "...").as_str(),
+                finish,
+            ]),
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(300));
+    progress_bar
 }
 
 #[test]

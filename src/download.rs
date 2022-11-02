@@ -6,6 +6,7 @@ use furse::{
     structures::file_structs::{File, FileRelationType},
     Furse,
 };
+use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use libium::{
     config::structs::ModLoader,
@@ -17,6 +18,7 @@ use std::{
     fs::read_dir,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 use tokio::{
     fs::{create_dir_all, remove_file},
@@ -137,19 +139,45 @@ pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) 
     create_dir_all(&*output_dir.join("mods")).await?;
     let mut tasks = Vec::new();
     let semaphore = Arc::new(Semaphore::new(75));
+    let progress_bar = ProgressBar::new(count_bytes(&to_download)).with_style(
+        ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({bytes}/{total_bytes}) ({percent}%)",
+        )?
+        .progress_chars("=> ")
+        .tick_strings(&["Downloading.  ", "Downloading.. ", "Downloading...", "Finished."])
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(300));
     for downloadable in to_download {
         let permit = semaphore.clone().acquire_owned().await?;
         let output_dir = output_dir.clone();
+        let progress_bar = progress_bar.clone();
         tasks.push(spawn(async move {
             let _permit = permit;
-            downloadable.download(&output_dir, |_x| {}, |_x| {}).await?;
+            downloadable
+                .download(
+                    &output_dir,
+                    |_| {},
+                    |x| progress_bar.inc(x.try_into().unwrap()), // increase progress on download update
+                )
+                .await?;
             Ok::<(), anyhow::Error>(())
         }));
     }
+    progress_bar.tick(); // tick progress bar to start drawing
     for handle in tasks {
         handle.await??;
     }
+    progress_bar.finish();
     Ok(())
+}
+
+/// Count the total size in bytes of the downloadables
+fn count_bytes(downloadables: &[Downloadable]) -> u64 {
+    let mut total = 0_u64;
+    for downloadable in downloadables {
+        total += downloadable.size.unwrap_or(0);
+    }
+    total
 }
 
 /// Check the `directory`
