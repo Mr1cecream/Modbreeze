@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::clap_derive::ValueEnum;
+use clap::{ValueEnum, builder::PossibleValue};
 use config::Config;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -28,11 +28,28 @@ impl PartialEq for Mod {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, ValueEnum, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum ModSide {
     Client,
     Server,
     All,
+    Resourcepack,
+    Shaderpack,
+}
+
+impl ValueEnum for ModSide {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[ModSide::Client, ModSide::Server, ModSide::All]
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        match &self {
+            &ModSide::All => Some(PossibleValue::new("All").aliases(["a", "common"])),
+            &ModSide::Client => Some(PossibleValue::new("Client").alias("c")),
+            &ModSide::Server => Some(PossibleValue::new("Server").alias("s")),
+            _ => None,
+        }
+    }
 }
 
 #[tokio::main]

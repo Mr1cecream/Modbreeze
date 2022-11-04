@@ -52,6 +52,13 @@ enum Commands {
         /// Minecraft root directory
         #[clap(short, long, value_parser, value_name = "DIR")]
         dir: Option<PathBuf>,
+        /// Whether to download resourcepacks
+        #[clap(short, long)]
+        resourcepacks: bool,
+        /// Whether to download shaderpacks
+        #[clap(short, long)]
+        shaderpacks: bool,
+
     },
 }
 
@@ -83,6 +90,8 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             file,
             url,
             dir,
+            resourcepacks,
+            shaderpacks,
         } => {
             // Get TOML source
             let source: PathOrUrl = if let Some(source) = get_source(file, url)? {
@@ -141,7 +150,7 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             progress_bar.finish();
 
             let progress_bar = create_spinner("Fetching mods", "Finished fetching mods.");
-            let mut to_download = download::get_downloadables(side, pack).await?;
+            let mut to_download = download::get_downloadables(side, resourcepacks, shaderpacks, pack).await?;
             progress_bar.finish();
 
             let progress_bar = create_spinner("Cleaning old mods", "Finished cleaning old mods.");

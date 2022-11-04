@@ -28,7 +28,7 @@ use tokio::{
 
 /// Get the `Downloadable`s for the mods in a `Pack`
 /// Returns a `Vec` of the `Downloadable`s
-pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Downloadable>> {
+pub async fn get_downloadables(side: ModSide, resourcepacks: bool, shaderpacks: bool, pack: Pack) -> Result<Vec<Downloadable>> {
     let api_key = env!("CF_API_KEY");
     let furse = Furse::new(api_key);
     let mods = if side == ModSide::All {
@@ -48,6 +48,7 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
         mc_version: &str,
         loader: &ModLoader,
         to_download: &mut Vec<Downloadable>,
+        output: &str,
     ) -> Result<()> {
         let mut futures = Vec::new();
         for mod_ in mods.iter() {
@@ -104,10 +105,10 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
                             .0
                             .download_url
                             .ok_or(BreezeError::DistributionDenied(mod_.name.clone(), mod_.id))?,
-                        output: PathBuf::from(if ok.0.file_name.ends_with(".zip") {
-                            "resourcepacks"
-                        } else {
+                        output: PathBuf::from(if ok.0.file_name.ends_with(".jar") {
                             "mods"
+                        } else {
+                            output
                         })
                         .join(ok.0.file_name),
                         size: Some(ok.0.file_length as u64),
@@ -120,18 +121,42 @@ pub async fn get_downloadables(side: ModSide, pack: Pack) -> Result<Vec<Download
             }
         }
         if !dependencies.is_empty() {
-            inner(dependencies, furse, mc_version, loader, to_download).await?;
+            inner(dependencies, furse, mc_version, loader, to_download, output).await?;
         }
         Ok(())
     }
-    inner(
+    let mut futures = Vec::new();
+    futures.push(inner(
         mods,
         &furse,
         &pack.mc_version,
         &pack.loader,
         &mut to_download,
-    )
-    .await?;
+        "mods"
+    ));
+    if resourcepacks {
+        futures.push(inner(
+            pack.resourcepacks,
+            &furse,
+            &pack.mc_version,
+            &pack.loader,
+            &mut to_download,
+            "resourcepacks"
+        ));
+    } 
+    if shaderpacks {
+        futures.push(inner(
+            pack.shaderpacks,
+            &furse,
+            &pack.mc_version,
+            &pack.loader,
+            &mut to_download,
+            "shaderpacks"
+        ));
+    } 
+    for res in futures::future::join_all(futures).await {
+        res?
+    }
     Ok(to_download)
 }
 

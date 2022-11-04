@@ -14,6 +14,8 @@ pub struct Pack {
     pub loader: ModLoader,
     pub mc_version: String,
     pub mods: Vec<Mod>,
+    pub resourcepacks: Vec<Mod>,
+    pub shaderpacks: Vec<Mod>,
 }
 
 #[derive(Deserialize)]
@@ -23,6 +25,8 @@ struct Data {
     loader: String,
     mc_version: String,
     mods: Mods,
+    resourcepacks: Option<HashMap<String, TomlMod>>,
+    shaderpacks: Option<HashMap<String, TomlMod>>,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +64,11 @@ impl TryFrom<Data> for Pack {
         convert_mods(&mut mods, data.mods.server, ModSide::Server);
         convert_mods(&mut mods, data.mods.common, ModSide::All);
 
+        let mut resourcepacks: Vec<Mod> = Vec::new();
+        convert_mods(&mut resourcepacks, data.resourcepacks, ModSide::Resourcepack);
+        let mut shaderpacks: Vec<Mod> = Vec::new();
+        convert_mods(&mut shaderpacks, data.shaderpacks, ModSide::Shaderpack);
+
         if mods.is_empty() {
             return Err(BreezeError::EmptyPack.into());
         }
@@ -70,6 +79,8 @@ impl TryFrom<Data> for Pack {
             loader,
             mc_version: data.mc_version,
             mods,
+            resourcepacks,
+            shaderpacks,
         })
     }
 }
@@ -83,6 +94,8 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: Option<HashMap<String, TomlMod>>, side
         ModSide::All => "common",
         ModSide::Client => "client",
         ModSide::Server => "server",
+        ModSide::Resourcepack => "resourcepack",
+        ModSide::Shaderpack => "shaderpack",
     };
     let new: Vec<Mod> = raw
         .par_iter()
