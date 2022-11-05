@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{ValueEnum, builder::PossibleValue};
+use clap::{builder::PossibleValue, ValueEnum};
 use config::Config;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -28,7 +28,7 @@ impl PartialEq for Mod {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum ModSide {
     Client,
     Server,

@@ -35,13 +35,27 @@ enum Commands {
         #[clap(short, long, value_parser, value_name = "DIR")]
         dir: Option<PathBuf>,
         /// Which types of mods to download
-        #[clap(short, long, value_parser, value_enum, value_name = "SIDE")]
+        #[clap(
+            short,
+            long,
+            value_parser,
+            value_enum,
+            ignore_case = true,
+            value_name = "SIDE"
+        )]
         side: Option<ModSide>,
     },
     /// Upgrade mods
     Upgrade {
         /// Which types of mods to download
-        #[clap(short, long, value_parser, value_enum, value_name = "SIDE")]
+        #[clap(
+            short,
+            long,
+            value_parser,
+            value_enum,
+            ignore_case = true,
+            value_name = "SIDE"
+        )]
         side: Option<ModSide>,
         /// TOML file with modpack definition
         #[clap(short, long, value_parser, value_name = "FILE")]
@@ -53,12 +67,11 @@ enum Commands {
         #[clap(short, long, value_parser, value_name = "DIR")]
         dir: Option<PathBuf>,
         /// Whether to download resourcepacks
-        #[clap(short, long)]
+        #[clap(long)]
         resourcepacks: bool,
         /// Whether to download shaderpacks
-        #[clap(short, long)]
+        #[clap(long)]
         shaderpacks: bool,
-
     },
 }
 
@@ -76,9 +89,7 @@ pub async fn cli(config: &mut Config) -> Result<()> {
         }
         Commands::Config { dir, side } => {
             if let Some(dir) = dir {
-                if !dir.exists() {
-                    tokio::fs::create_dir_all(&dir).await?;
-                }
+                tokio::fs::create_dir_all(&dir).await?;
                 config.mc_dir = Some(fs::canonicalize(dir)?);
             }
             if let Some(side) = side {
@@ -107,9 +118,7 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             // Get Minecraft directory
             let mc_dir = if let Some(dir) = dir {
                 info!("Setting Minecraft Directory: {:?}", dir);
-                if !dir.exists() {
-                    tokio::fs::create_dir_all(&dir).await?;
-                }
+                tokio::fs::create_dir_all(&dir).await?;
                 config.mc_dir = Some(fs::canonicalize(&dir)?);
                 dir
             } else {
@@ -120,18 +129,16 @@ pub async fn cli(config: &mut Config) -> Result<()> {
                     let dir: PathBuf = prompt("Minecraft Root Directory")?;
                     info!("Setting Minecraft Directory: {:?}", dir);
 
-                    if !dir.exists() {
-                        tokio::fs::create_dir_all(&dir).await?;
-                    }
+                    tokio::fs::create_dir_all(&dir).await?;
                     config.mc_dir = Some(fs::canonicalize(&dir)?);
                     dir
                 }
             };
             let side = if let Some(side) = side {
-                config.side = Some(side.clone());
+                config.side = Some(side);
                 side
             } else {
-                config.side.clone().unwrap_or(ModSide::Client)
+                config.side.unwrap_or(ModSide::Client)
             };
 
             let progress_bar = create_spinner("Parsing pack", "Finished parsing pack.");
@@ -150,11 +157,14 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             progress_bar.finish();
 
             let progress_bar = create_spinner("Fetching mods", "Finished fetching mods.");
-            let mut to_download = download::get_downloadables(side, resourcepacks, shaderpacks, pack).await?;
+            let mut to_download =
+                download::get_downloadables(side, resourcepacks, shaderpacks, pack).await?;
             progress_bar.finish();
 
             let progress_bar = create_spinner("Cleaning old mods", "Finished cleaning old mods.");
-            download::clean(&mc_dir.join("mods"), &mut to_download).await?;
+            download::clean(&mc_dir.join("mods"), &mut to_download, true).await?;
+            download::clean(&mc_dir.join("resourcepacks"), &mut to_download, false).await?;
+            download::clean(&mc_dir.join("shaderpacks"), &mut to_download, false).await?;
             progress_bar.finish();
 
             download::download(Arc::new(mc_dir), to_download).await?;

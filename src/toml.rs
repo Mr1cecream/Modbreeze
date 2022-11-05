@@ -36,7 +36,7 @@ struct Mods {
     common: Option<HashMap<String, TomlMod>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(untagged)]
 enum TomlMod {
     Id(u32),
@@ -65,11 +65,15 @@ impl TryFrom<Data> for Pack {
         convert_mods(&mut mods, data.mods.common, ModSide::All);
 
         let mut resourcepacks: Vec<Mod> = Vec::new();
-        convert_mods(&mut resourcepacks, data.resourcepacks, ModSide::Resourcepack);
+        convert_mods(
+            &mut resourcepacks,
+            data.resourcepacks,
+            ModSide::Resourcepack,
+        );
         let mut shaderpacks: Vec<Mod> = Vec::new();
         convert_mods(&mut shaderpacks, data.shaderpacks, ModSide::Shaderpack);
 
-        if mods.is_empty() {
+        if mods.is_empty() && resourcepacks.is_empty() && shaderpacks.is_empty() {
             return Err(BreezeError::EmptyPack.into());
         }
 
@@ -101,9 +105,12 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: Option<HashMap<String, TomlMod>>, side
         .par_iter()
         .map(|(name, id)| {
             let name = name.to_string();
-            let side = side.clone();
             let (id, ignore_loader, ignore_version) = match id {
-                TomlMod::Id(id) => (id, false, false),
+                TomlMod::Id(id) => (
+                    id,
+                    side == ModSide::Resourcepack || side == ModSide::Shaderpack,
+                    false,
+                ),
                 TomlMod::Tabled {
                     id,
                     ignore_loader,

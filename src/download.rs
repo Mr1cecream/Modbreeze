@@ -15,6 +15,7 @@ use libium::{
 use log::{error, info};
 use rayon::prelude::*;
 use std::{
+    cell::RefCell,
     fs::read_dir,
     path::{Path, PathBuf},
     sync::Arc,
@@ -28,7 +29,12 @@ use tokio::{
 
 /// Get the `Downloadable`s for the mods in a `Pack`
 /// Returns a `Vec` of the `Downloadable`s
-pub async fn get_downloadables(side: ModSide, resourcepacks: bool, shaderpacks: bool, pack: Pack) -> Result<Vec<Downloadable>> {
+pub async fn get_downloadables(
+    side: ModSide,
+    resourcepacks: bool,
+    shaderpacks: bool,
+    pack: Pack,
+) -> Result<Vec<Downloadable>> {
     let api_key = env!("CF_API_KEY");
     let furse = Furse::new(api_key);
     let mods = if side == ModSide::All {
@@ -40,14 +46,13 @@ pub async fn get_downloadables(side: ModSide, resourcepacks: bool, shaderpacks: 
             .collect()
     };
 
-    let mut to_download: Vec<Downloadable> = Vec::new();
-    #[async_recursion]
+    #[async_recursion(?Send)]
     async fn inner(
         mods: Vec<Mod>,
         furse: &Furse,
         mc_version: &str,
         loader: &ModLoader,
-        to_download: &mut Vec<Downloadable>,
+        to_download: &RefCell<Vec<Downloadable>>,
         output: &str,
     ) -> Result<()> {
         let mut futures = Vec::new();
@@ -90,9 +95,9 @@ pub async fn get_downloadables(side: ModSide, resourcepacks: bool, shaderpacks: 
                             .map(|d| Mod {
                                 name: format!("Dependency of {}", &mod_.name),
                                 id: d.mod_id as u32,
-                                ignore_loader: false,
-                                ignore_version: false,
-                                side: ModSide::All,
+                                ignore_loader: mod_.ignore_loader,
+                                ignore_version: mod_.ignore_version,
+                                side: mod_.side, // doesn't matter in this situation
                             })
                             .collect();
                     dependencies_.into_iter().for_each(|d| {
@@ -116,7 +121,7 @@ pub async fn get_downloadables(side: ModSide, resourcepacks: bool, shaderpacks: 
                 },
             );
             match downloadable {
-                Ok(ok) => to_download.push(ok),
+                Ok(ok) => to_download.borrow_mut().push(ok),
                 Err(err) => error!("{}", err),
             }
         }
@@ -125,14 +130,15 @@ pub async fn get_downloadables(side: ModSide, resourcepacks: bool, shaderpacks: 
         }
         Ok(())
     }
+    let to_download = RefCell::new(Vec::new());
     let mut futures = Vec::new();
     futures.push(inner(
         mods,
         &furse,
         &pack.mc_version,
         &pack.loader,
-        &mut to_download,
-        "mods"
+        &to_download,
+        "mods",
     ));
     if resourcepacks {
         futures.push(inner(
@@ -140,28 +146,27 @@ pub async fn get_downloadables(side: ModSide, resourcepacks: bool, shaderpacks: 
             &furse,
             &pack.mc_version,
             &pack.loader,
-            &mut to_download,
-            "resourcepacks"
+            &to_download,
+            "resourcepacks",
         ));
-    } 
+    }
     if shaderpacks {
         futures.push(inner(
             pack.shaderpacks,
             &furse,
             &pack.mc_version,
             &pack.loader,
-            &mut to_download,
-            "shaderpacks"
+            &to_download,
+            "shaderpacks",
         ));
-    } 
+    }
     for res in futures::future::join_all(futures).await {
         res?
     }
-    Ok(to_download)
+    Ok(to_download.into_inner())
 }
 
 pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) -> Result<()> {
-    create_dir_all(&*output_dir.join("mods")).await?;
     let mut tasks = Vec::new();
     let semaphore = Arc::new(Semaphore::new(75));
     let progress_bar = ProgressBar::new(count_bytes(&to_download)).with_style(
@@ -176,6 +181,10 @@ pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) 
         let permit = semaphore.clone().acquire_owned().await?;
         let output_dir = output_dir.clone();
         let progress_bar = progress_bar.clone();
+        let folder = &downloadable.output.parent();
+        if let Some(folder) = folder {
+            create_dir_all(folder).await?;
+        }
         tasks.push(spawn(async move {
             let _permit = permit;
             downloadable
@@ -188,7 +197,6 @@ pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) 
             Ok::<(), anyhow::Error>(())
         }));
     }
-    progress_bar.tick(); // tick progress bar to start drawing
     for handle in tasks {
         handle.await??;
     }
@@ -209,7 +217,11 @@ fn count_bytes(downloadables: &[Downloadable]) -> u64 {
 /// If there are files that are not in `to_download`, they will be removed
 /// If a file in `to_download` is already there, it will be removed from the Vec
 /// If a file is a `.part` file or the move failed, the file will be deleted
-pub async fn clean(directory: &Path, to_download: &mut Vec<Downloadable>) -> Result<()> {
+pub async fn clean(
+    directory: &Path,
+    to_download: &mut Vec<Downloadable>,
+    remove: bool,
+) -> Result<()> {
     let dupes = find_dupes_by_key(to_download, Downloadable::filename);
     if !dupes.is_empty() {
         info!(
@@ -236,12 +248,13 @@ pub async fn clean(directory: &Path, to_download: &mut Vec<Downloadable>) -> Res
             {
                 to_download.swap_remove(index);
             } else if filename.ends_with("part")
-                || move_file(
-                    file.path(),
-                    directory.join(".old").join(filename),
-                    &FileCopyOptions::new(),
-                )
-                .is_err()
+                || (remove
+                    && move_file(
+                        file.path(),
+                        directory.join(".old").join(filename),
+                        &FileCopyOptions::new(),
+                    )
+                    .is_err())
             {
                 remove_file(file.path()).await?;
             }
@@ -252,7 +265,6 @@ pub async fn clean(directory: &Path, to_download: &mut Vec<Downloadable>) -> Res
 
 /// Find duplicates of the items in `slice` using a value obtained by the `key` closure
 /// Returns the indices of duplicate items in reverse order for easy removal
-// Source: https://github.com/gorilla-devs/ferium
 fn find_dupes_by_key<T, V, F>(slice: &mut [T], key: F) -> Vec<usize>
 where
     V: Eq + Ord,
