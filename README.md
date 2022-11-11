@@ -1,7 +1,7 @@
 # ModBreeze
 [![rust badge](https://img.shields.io/static/v1?label=Made%20with&message=Rust&style=for-the-badge&logo=rust&labelColor=e82833&color=b11522)](https://www.rust-lang.org/)
 [![license badge](https://img.shields.io/github/license/Mr1cecream/ModBreeze?style=for-the-badge)](https://github.com/Mr1cecream/ModBreeze/blob/main/LICENSE)
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/N4N1GB1UR)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/mr_icecream)
 
 > Currently W.I.P
 
