@@ -8,7 +8,7 @@ if (-not (Test-Path "$modbreeze_dir\bin")) {
 
 # download zip archive from latest github release
 echo "Downloading..."
-curl https://github.com/Mr1cecream/Modbreeze/releases/latest/download/modbreeze-windows.zip `
+curl https://github.com/Mr1cecream/ModBreeze/releases/download/v0.3.0/modbreeze-windows.zip `
     -o "$modbreeze_dir\bin\modbreeze.zip"
 
 # extract binary file from zip archive and remove archive
