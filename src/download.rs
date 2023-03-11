@@ -14,6 +14,7 @@ use libium::{
 };
 use log::{error, info};
 use rayon::prelude::*;
+use reqwest::Client;
 use std::{
     cell::RefCell,
     fs::read_dir,
@@ -75,10 +76,16 @@ pub async fn get_downloadables(
             let files = &files[i];
             let downloadable = mod_downloadable::get_latest_compatible_file(
                 files.to_vec(),
-                mc_version,
-                loader,
-                Some(!mod_.ignore_version),
-                Some(!mod_.ignore_loader),
+                if mod_.ignore_version {
+                    None
+                } else {
+                    Some(mc_version)
+                },
+                if mod_.ignore_loader {
+                    None
+                } else {
+                    Some(loader)
+                },
             )
             .map_or_else(
                 || {
@@ -116,7 +123,7 @@ pub async fn get_downloadables(
                             output
                         })
                         .join(ok.0.file_name),
-                        size: Some(ok.0.file_length as u64),
+                        length: ok.0.file_length as u64,
                     })
                 },
             );
@@ -177,11 +184,13 @@ pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) 
         .tick_strings(&["Downloading.  ", "Downloading.. ", "Downloading...", "Finished."])
     );
     progress_bar.enable_steady_tick(Duration::from_millis(300));
+    let client = Arc::new(Client::new());
     for downloadable in to_download {
         let permit = semaphore.clone().acquire_owned().await?;
         let output_dir = output_dir.clone();
         let progress_bar = progress_bar.clone();
         let folder = &downloadable.output.parent();
+        let client = client.clone();
         if let Some(folder) = folder {
             create_dir_all(folder).await?;
         }
@@ -189,9 +198,9 @@ pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) 
             let _permit = permit;
             downloadable
                 .download(
+                    &client,
                     &output_dir,
-                    |_| {},
-                    |x| progress_bar.inc(x.try_into().unwrap()), // increase progress on download update
+                    |addition| progress_bar.inc(addition.try_into().unwrap()), // increase progress on download update
                 )
                 .await?;
             Ok::<(), anyhow::Error>(())
@@ -208,7 +217,7 @@ pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) 
 fn count_bytes(downloadables: &[Downloadable]) -> u64 {
     let mut total = 0_u64;
     for downloadable in downloadables {
-        total += downloadable.size.unwrap_or(0);
+        total += downloadable.length;
     }
     total
 }

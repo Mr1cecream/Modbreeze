@@ -7,6 +7,7 @@ use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{info, warn};
 use promptly::prompt;
+use reqwest::header::CONTENT_TYPE;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 use thiserror::Error;
 use url::Url;
@@ -152,11 +153,16 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             let toml = match source {
                 PathOrUrl::Path(path) => std::fs::read_to_string(path)?,
                 PathOrUrl::Url(url) => {
-                    let resp = ureq::get(url.as_str()).call()?;
-                    match resp.content_type() {
-                        "text/plain" => resp.into_string()?,
-                        ct => return Err(CliError::NonPlainTextResponse(ct.to_string()).into()),
+                    let resp = reqwest::get(url.as_str()).await?;
+                    let content_type = resp.headers().get(CONTENT_TYPE);
+                    if let Some(ct) = content_type {
+                        if let Ok(ct) = ct.to_str() {
+                            if !ct.contains("text/plain") {
+                                return Err(CliError::NonPlainTextResponse(ct.to_string()).into());
+                            }
+                        }
                     }
+                    resp.text().await?
                 }
             };
             let pack = crate::toml::parse(toml)?;
