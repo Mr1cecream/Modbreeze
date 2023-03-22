@@ -179,7 +179,11 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             download::clean(&mc_dir.join("shaderpacks"), &mut to_download, false).await?;
             progress_bar.finish();
 
-            download::download(Arc::new(mc_dir), to_download).await?;
+            if !to_download.is_empty() {
+                download::download(Arc::new(mc_dir), to_download).await?;
+            } else {
+                info!("Already up to date.");
+            }
         }
     };
     Ok(())
