@@ -5,7 +5,7 @@
     "license": "GPL-3.0",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/Mr1cecream/Modbreeze/releases/download/v0.3.1/modbreeze-windows.zip",
+            "url": "https://github.com/Mr1cecream/Modbreeze/releases/download/v0.3.1/modbreeze-windows-x86_64.zip",
             "hash": "d46959ac6007a38bb447cf509b91907e8a7348a9388b47eee3468d35c7b7441a"
         }
     },
@@ -15,7 +15,7 @@
     "autoupdate": {
         "architecture": {
             "64bit": {
-                "url": "https://github.com/Mr1cecream/Modbreeze/releases/download/v$version/modbreeze-windows.zip"
+                "url": "https://github.com/Mr1cecream/Modbreeze/releases/download/v$version/modbreeze-windows-x86_64.zip"
             }
         },
         "hash": {
