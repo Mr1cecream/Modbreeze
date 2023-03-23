@@ -3,9 +3,22 @@
 [![license badge](https://img.shields.io/github/license/Mr1cecream/ModBreeze?style=for-the-badge)](https://github.com/Mr1cecream/ModBreeze/blob/main/LICENSE)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/mr_icecream)
 
-> Currently W.I.P
+Modbreeze is a fast and easy to use mod manager for Minecraft written in Rust that allows easy sharing of modpacks with your friends using TOML.
 
-A modpack manager for Minecraft with support for defining modpacks via a .TOML file, allowing sharing modpacks easily.
+## Installation
+
+### Windows (via Scoop)
+- Install [Scoop](https://scoop.sh/) if you don't have it already.
+- Run `scoop install https://raw.githubusercontent.com/Mr1cecream/ModBreeze/main/scoop/modbreeze.json`
+
+### Manually
+- Download the zip for your platform from [the releases](https://github.com/Mr1cecream/Modbreeze/releases).
+- Extract the zip into a folder of your choice.
+- Optionally add the folder to PATH.
+
+### From Source
+Compiling Modbreeze requires a CurseForge API key.
+If you have one of those, set the environment variable `CF_API_KEY` to it, clone the repo and run `cargo b -r`.
 
 ## Usage
 Run `modbreeze -h` or `modbreeze help` for help.
@@ -23,7 +36,7 @@ or with optional parameters to ignore the mod loader or Minecraft version like s
 `mod = { id = 123, ignore_loader = true, ignore_version = true }`
 
 You can also add Resourcepacks and Shaderpacks to your packs,
-the same way you would add mods, except under the `[resourcepacks]` and `[shaderpacks]` categories, respectively.
+the same way you would add mods, under the `[resourcepacks]` and `[shaderpacks]` categories, respectively.
 > **Note**: Shaderpacks are currently unsupported due to no Customization support in the CurseForge API.
 
 ### CLI

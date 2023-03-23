@@ -5,7 +5,7 @@ edition = "2021"
 authors = [
     "Mr. Icecream",
 ]
-description = "A modpack manager for Minecraft with support for defining modpacks via a .TOML file, allowing sharing modpacks easily."
+description = "Modbreeze is a fast and easy to use mod manager for Minecraft written in Rust that allows easy sharing of modpacks with your friends using TOML."
 repository = "https://github.com/Mr1cecream/ModBreeze"
 categories = ["command-line-utils"]
 readme = "README.md"
