@@ -10,7 +10,6 @@
         }
     },
     "bin": "modbreeze.exe",
-    "persist": "config.json",
     "checkver": "github",
     "autoupdate": {
         "architecture": {
