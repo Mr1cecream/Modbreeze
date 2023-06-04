@@ -1,7 +1,5 @@
 use anyhow::Result;
-use clap::{builder::PossibleValue, ValueEnum};
 use config::Config;
-use serde::{Deserialize, Serialize};
 use std::{
     io::prelude::Write,
     path::{Path, PathBuf},
@@ -12,45 +10,7 @@ mod config;
 mod download;
 mod errors;
 mod toml;
-
-#[derive(Debug, Clone)]
-pub struct Mod {
-    name: String,
-    id: u32,
-    side: ModSide,
-    ignore_loader: bool,
-    ignore_version: bool,
-}
-
-impl PartialEq for Mod {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum ModSide {
-    Client,
-    Server,
-    All,
-    Resourcepack,
-    Shaderpack,
-}
-
-impl ValueEnum for ModSide {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[ModSide::Client, ModSide::Server, ModSide::All]
-    }
-
-    fn to_possible_value(&self) -> Option<PossibleValue> {
-        match &self {
-            &ModSide::All => Some(PossibleValue::new("All").aliases(["a", "common"])),
-            &ModSide::Client => Some(PossibleValue::new("Client").alias("c")),
-            &ModSide::Server => Some(PossibleValue::new("Server").alias("s")),
-            _ => None,
-        }
-    }
-}
+mod structs;
 
 #[tokio::main]
 async fn main() {

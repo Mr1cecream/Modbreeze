@@ -1,5 +1,5 @@
 use crate::errors::BreezeError;
-use crate::{Mod, ModSide};
+use crate::structs::{Mod, ModSide, Pack};
 use anyhow::Result;
 use libium::config::structs::ModLoader;
 use log::{info, warn};
@@ -7,16 +7,6 @@ use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
 
-#[derive(Debug)]
-pub struct Pack {
-    pub name: String,
-    pub version: String,
-    pub loader: ModLoader,
-    pub mc_version: String,
-    pub mods: Vec<Mod>,
-    pub resourcepacks: Vec<Mod>,
-    pub shaderpacks: Vec<Mod>,
-}
 
 #[derive(Deserialize)]
 struct Data {

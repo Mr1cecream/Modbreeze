@@ -1,4 +1,4 @@
-use crate::{errors::BreezeError, toml::Pack, Mod, ModSide};
+use crate::{errors::BreezeError, structs::{Pack, Mod, ModSide}};
 use anyhow::Result;
 use async_recursion::async_recursion;
 use fs_extra::file::{move_file, CopyOptions as FileCopyOptions};

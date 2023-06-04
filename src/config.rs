@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use url::Url;
 
-use crate::ModSide;
+use crate::structs::ModSide;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct Config {

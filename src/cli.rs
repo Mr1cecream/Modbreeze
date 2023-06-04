@@ -1,6 +1,7 @@
 use crate::{
     config::{Config, PathOrUrl},
-    download, ModSide,
+    download, 
+    structs::ModSide,
 };
 use anyhow::Result;
 use clap::{Parser, Subcommand};
