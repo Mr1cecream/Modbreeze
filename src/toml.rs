@@ -62,6 +62,21 @@ impl TryFrom<Data> for Pack {
         let mut shaderpacks: Vec<Mod> = Vec::new();
         convert_mods(&mut shaderpacks, data.shaderpacks, ModSide::Shaderpack);
 
+        // TODO: remove when Customization support is added to CurseForge API
+        // disable CurseForge shaderpacks
+        let filtered: Vec<Mod> = shaderpacks
+            .clone()
+            .into_iter()
+            .filter(|s| match s.id {
+                ModId::CurseForgeId(_) => false,
+                _ => true,
+            })
+            .collect();
+        if shaderpacks.len() != filtered.len() {
+            warn!("CurseForge shaderpacks are unsupported by the CurseForge API and are disabled in modbreeze.");
+            shaderpacks = filtered;
+        }
+
         if mods.is_empty() && resourcepacks.is_empty() && shaderpacks.is_empty() {
             return Err(BreezeError::EmptyPack.into());
         }

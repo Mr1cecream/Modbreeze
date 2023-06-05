@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
-use log::{info, warn};
+use log::info;
 use promptly::prompt;
 use reqwest::header::CONTENT_TYPE;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
@@ -106,12 +106,6 @@ pub async fn cli(config: &mut Config) -> Result<()> {
             resourcepacks,
             shaderpacks,
         } => {
-            // TODO: remove when Customization support is to the CurseForge API
-            if shaderpacks {
-                warn!("Shaderpacks are currently unsupported by Modbreeze.");
-            }
-            let shaderpacks = false;
-
             // Get TOML source
             let source: PathOrUrl = if let Some(source) = get_source(file, url)? {
                 config.source = Some(source.clone());
