@@ -7,7 +7,6 @@ use async_recursion::async_recursion;
 use ferinth::{structures::version::DependencyType, Ferinth};
 use fs_extra::file::{move_file, CopyOptions as FileCopyOptions};
 use furse::{structures::file_structs::FileRelationType, Furse};
-use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use libium::{
@@ -60,8 +59,8 @@ pub async fn get_downloadables(
         mods: Vec<Mod>,
         furse: &Furse,
         ferinth: &Ferinth,
-        mc_version: Arc<String>,
-        loader: Arc<ModLoader>,
+        mc_version: String,
+        loader: ModLoader,
         to_download: Arc<RwLock<Vec<Downloadable>>>,
         output: Arc<String>,
     ) -> Result<()> {
@@ -82,28 +81,26 @@ pub async fn get_downloadables(
                 let mc_version_to_check = if mod_.ignore_version {
                     None
                 } else {
-                    Arc::<String>::into_inner(mc_version)
+                    Some(mc_version)
                 };
                 let loader_to_check = if mod_.ignore_loader {
                     None
                 } else {
-                    Arc::<ModLoader>::into_inner(loader)
+                    Some(loader)
                 };
                 let _permit = permit;
                 let downloadable = match mod_.id.clone() {
-                    ModId::CurseForgeId(id) => mod_downloadable::get_latest_compatible_file(
+                    ModId::CurseForgeId(id) => match mod_downloadable::get_latest_compatible_file(
                         furse.get_mod_files(id.try_into()?).await?,
                         mc_version_to_check.as_deref(),
                         loader_to_check.as_ref(),
-                    )
-                    .map_or_else(
-                        || {
-                            Err(BreezeError::NoCompatFile(
-                                mod_.name.clone(),
-                                mod_.id.clone(),
-                            ))
-                        },
-                        |ok| {
+                    ) {
+                        None => Err(BreezeError::NoCompatFile(
+                            mod_.name.clone(),
+                            mod_.id.clone(),
+                        )),
+                        Some(ok) => {
+                            info!("Got file for mod {}, id: {}", mod_.name, mod_.id);
                             let dependencies_: Vec<Mod> = ok
                                 .0
                                 .dependencies
@@ -140,34 +137,33 @@ pub async fn get_downloadables(
                                 .join(ok.0.file_name),
                                 length: ok.0.file_length as u64,
                             })
-                        },
-                    ),
-                    ModId::ModrinthId(id) => mod_downloadable::get_latest_compatible_version(
+                        }
+                    },
+                    ModId::ModrinthId(id) => match mod_downloadable::get_latest_compatible_version(
                         &ferinth.list_versions(&id.to_string()).await?,
                         mc_version_to_check.as_deref(),
                         loader_to_check.as_ref(),
-                    )
-                    .map_or_else(
-                        || {
-                            Err(BreezeError::NoCompatFile(
-                                mod_.name.clone(),
-                                mod_.id.clone(),
-                            ))
-                        },
-                        |ok| {
+                    ) {
+                        None => Err(BreezeError::NoCompatFile(
+                            mod_.name.clone(),
+                            mod_.id.clone(),
+                        )),
+                        Some(ok) => {
+                            info!("Got version file for mod {}, id: {}", mod_.name, mod_.id);
                             for d in ok.1.dependencies.into_iter().filter(|d| {
                                 d.dependency_type == DependencyType::Required
                                     && (d.project_id.is_some() || d.version_id.is_some())
                             }) {
-                                let project_id = if let Some(project_id) = d.project_id {
-                                    project_id
-                                } else {
-                                    if let Ok(ok) =
-                                        block_on(ferinth.get_version(&d.version_id.unwrap()))
-                                    {
-                                        ok.project_id
-                                    } else {
-                                        continue;
+                                let project_id = match d.project_id {
+                                    Some(project_id) => project_id,
+                                    None => {
+                                        if let Ok(ok) =
+                                            ferinth.get_version(&d.version_id.unwrap()).await
+                                        {
+                                            ok.project_id
+                                        } else {
+                                            continue;
+                                        }
                                     }
                                 };
                                 let d = Mod {
@@ -194,10 +190,9 @@ pub async fn get_downloadables(
                                 .join(ok.0.filename),
                                 length: ok.0.size as u64,
                             })
-                        },
-                    ),
+                        }
+                    },
                 };
-
                 match downloadable {
                     Ok(ok) => to_download.write().await.push(ok),
                     Err(err) => error!("{}", err),
@@ -209,7 +204,7 @@ pub async fn get_downloadables(
             let _res = res??;
         }
         let dependencies = dependencies.lock().expect("Mutex poisoned");
-        if !dependencies.is_empty() {
+        if !(dependencies.is_empty()) {
             inner(
                 dependencies.clone(),
                 furse,
@@ -225,8 +220,8 @@ pub async fn get_downloadables(
     }
     let to_download = Arc::new(RwLock::new(Vec::new()));
     let mut futures = Vec::new();
-    let mc_version = Arc::new(pack.mc_version);
-    let loader = Arc::new(pack.loader);
+    let mc_version = pack.mc_version;
+    let loader = pack.loader;
     futures.push(inner(
         mods,
         &furse,
