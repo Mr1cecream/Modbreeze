@@ -4,6 +4,7 @@
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/mr_icecream)
 
 Modbreeze is a fast and easy to use mod manager for Minecraft written in Rust that allows easy sharing of modpacks with your friends using TOML.
+Currently supports both CurseForge and Modrinth.
 
 ## Installation
 
@@ -19,6 +20,7 @@ Modbreeze is a fast and easy to use mod manager for Minecraft written in Rust th
 ### From Source
 Compiling Modbreeze requires a CurseForge API key.
 If you have one of those, set the environment variable `CF_API_KEY` to it, clone the repo and run `cargo b -r`.
+If you wish to compile Modbreeze without CurseForge support (Modrinth only) set the variable to an empty value.
 
 ## Usage
 Run `modbreeze -h` or `modbreeze help` for help.
@@ -31,13 +33,15 @@ Mods are split into 3 different categories: `[mods.common]`, `[mods.client]` and
 Use the common category for mods that should be installed on both the client and the server,
 and the client and server categories for mods that should be installed on the client side and the server side, respectively.
 
-Mods can be defined by simple ProjectIDs such as `mod = 123`
-or with optional parameters to ignore the mod loader or Minecraft version like so:
-`mod = { id = 123, ignore_loader = true, ignore_version = true }`
+Mods can be defined by simple ProjectIDs such as `mod = 123456` for CurseForge
+or `mod = "AABBCC"` for Modrinth as well as Modrinth slugs such as `mod = "sodium"`.
+If you wish to add optional parameters to ignore the mod loader or Minecraft version,
+you can do this like so:
+`mod = { id = 123456, ignore_loader = true, ignore_version = true }`
 
 You can also add Resourcepacks and Shaderpacks to your packs,
 the same way you would add mods, under the `[resourcepacks]` and `[shaderpacks]` categories, respectively.
-> **Note**: Shaderpacks are currently unsupported due to no Customization support in the CurseForge API.
+> **Note**: Shaderpacks from CurseForge are currently unsupported due to no Customization support in the CurseForge API.
 
 ### CLI
 You can download modpacks by using the command `modbreeze upgrade` and providing the source via either `-f <FILE>` or `-u <URL>`,
