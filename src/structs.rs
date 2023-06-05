@@ -1,11 +1,11 @@
-use clap::{ValueEnum, builder::PossibleValue};
+use clap::{builder::PossibleValue, ValueEnum};
 use libium::config::structs::ModLoader;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct Mod {
     pub name: String,
-    pub id: u32,
+    pub id: ModId,
     pub side: ModSide,
     pub ignore_loader: bool,
     pub ignore_version: bool,
@@ -38,6 +38,25 @@ impl ValueEnum for ModSide {
             &ModSide::Server => Some(PossibleValue::new("Server").alias("s")),
             _ => None,
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum ModId {
+    /// CurseForge ProjectID
+    CurseForgeId(u32),
+    /// Modrinth ProjectID
+    ModrinthId(String),
+}
+
+impl std::fmt::Display for ModId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Self::CurseForgeId(id) => format!("[CurseForge]{id}"),
+            Self::ModrinthId(id) => format!("[Modrinth]{id}"),
+        };
+        write!(f, "{}", str)
     }
 }
 

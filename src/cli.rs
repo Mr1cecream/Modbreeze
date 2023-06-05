@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, PathOrUrl},
-    download, 
+    download,
     structs::ModSide,
 };
 use anyhow::Result;

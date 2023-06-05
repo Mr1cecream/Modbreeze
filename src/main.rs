@@ -9,8 +9,8 @@ mod cli;
 mod config;
 mod download;
 mod errors;
-mod toml;
 mod structs;
+mod toml;
 
 #[tokio::main]
 async fn main() {

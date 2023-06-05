@@ -1,11 +1,13 @@
-use crate::{errors::BreezeError, structs::{Pack, Mod, ModSide}};
+use crate::{
+    errors::BreezeError,
+    structs::{Mod, ModId, ModSide, Pack},
+};
 use anyhow::Result;
 use async_recursion::async_recursion;
+use ferinth::{structures::version::DependencyType, Ferinth};
 use fs_extra::file::{move_file, CopyOptions as FileCopyOptions};
-use furse::{
-    structures::file_structs::{File, FileRelationType},
-    Furse,
-};
+use furse::{structures::file_structs::FileRelationType, Furse};
+use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use libium::{
@@ -16,16 +18,16 @@ use log::{error, info};
 use rayon::prelude::*;
 use reqwest::Client;
 use std::{
-    cell::RefCell,
     fs::read_dir,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 use tokio::{
     fs::{create_dir_all, remove_file},
     spawn,
-    sync::Semaphore,
+    sync::{RwLock, Semaphore},
+    task::JoinSet,
 };
 
 /// Get the `Downloadable`s for the mods in a `Pack`
@@ -38,6 +40,12 @@ pub async fn get_downloadables(
 ) -> Result<Vec<Downloadable>> {
     let api_key = env!("CF_API_KEY");
     let furse = Furse::new(api_key);
+    let ferinth = Ferinth::new(
+        "modbreeze",
+        option_env!("CARGO_PKG_VERSION"),
+        Some("Mr. Icecream#9624"),
+        None,
+    )?;
     let mods = if side == ModSide::All {
         pack.mods
     } else {
@@ -51,126 +59,211 @@ pub async fn get_downloadables(
     async fn inner(
         mods: Vec<Mod>,
         furse: &Furse,
-        mc_version: &str,
-        loader: &ModLoader,
-        to_download: &RefCell<Vec<Downloadable>>,
-        output: &str,
+        ferinth: &Ferinth,
+        mc_version: Arc<String>,
+        loader: Arc<ModLoader>,
+        to_download: Arc<RwLock<Vec<Downloadable>>>,
+        output: Arc<String>,
     ) -> Result<()> {
-        let mut futures = Vec::new();
+        let dependencies: Arc<Mutex<Vec<Mod>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut tasks = JoinSet::new();
+        let semaphore = Arc::new(Semaphore::new(75));
         for mod_ in mods.iter() {
-            futures.push(furse.get_mod_files(mod_.id.try_into()?));
-        }
-        let files = futures::future::join_all(futures).await;
-        files.par_iter().for_each(|files| match files {
-            Err(err) => error!("{}", err),
-            _ => (),
-        });
-        let files: Vec<Vec<File>> = files
-            .into_iter()
-            .filter(|files| files.is_ok())
-            .map(|files| files.unwrap())
-            .collect();
-        let mut dependencies: Vec<Mod> = Vec::new();
-        for i in 0..mods.len() {
-            let mod_ = &mods[i];
-            let files = &files[i];
-            let downloadable = mod_downloadable::get_latest_compatible_file(
-                files.to_vec(),
-                if mod_.ignore_version {
+            let permit = semaphore.clone().acquire_owned().await?;
+            let furse = furse.clone();
+            let ferinth = ferinth.clone();
+            let mc_version = mc_version.clone();
+            let loader = loader.clone();
+            let to_download = to_download.clone();
+            let output = output.clone();
+            let mod_ = mod_.clone();
+            let dependencies = dependencies.clone();
+            tasks.spawn(async move {
+                let mc_version_to_check = if mod_.ignore_version {
                     None
                 } else {
-                    Some(mc_version)
-                },
-                if mod_.ignore_loader {
+                    Arc::<String>::into_inner(mc_version)
+                };
+                let loader_to_check = if mod_.ignore_loader {
                     None
                 } else {
-                    Some(loader)
-                },
-            )
-            .map_or_else(
-                || {
-                    Err(BreezeError::NoCompatFile(
-                        mod_.name.clone(),
-                        mod_.id.clone(),
-                    ))
-                },
-                |ok| {
-                    let dependencies_: Vec<Mod> =
-                        ok.0.dependencies
-                            .into_iter()
-                            .filter(|d| d.relation_type == FileRelationType::RequiredDependency)
-                            .map(|d| Mod {
-                                name: format!("Dependency of {}", &mod_.name),
-                                id: d.mod_id as u32,
-                                ignore_loader: mod_.ignore_loader,
-                                ignore_version: mod_.ignore_version,
-                                side: mod_.side, // doesn't matter in this situation
+                    Arc::<ModLoader>::into_inner(loader)
+                };
+                let _permit = permit;
+                let downloadable = match mod_.id.clone() {
+                    ModId::CurseForgeId(id) => mod_downloadable::get_latest_compatible_file(
+                        furse.get_mod_files(id.try_into()?).await?,
+                        mc_version_to_check.as_deref(),
+                        loader_to_check.as_ref(),
+                    )
+                    .map_or_else(
+                        || {
+                            Err(BreezeError::NoCompatFile(
+                                mod_.name.clone(),
+                                mod_.id.clone(),
+                            ))
+                        },
+                        |ok| {
+                            let dependencies_: Vec<Mod> = ok
+                                .0
+                                .dependencies
+                                .into_iter()
+                                .filter(|d| d.relation_type == FileRelationType::RequiredDependency)
+                                .map(|d| Mod {
+                                    name: format!("Dependency of {}", &mod_.name),
+                                    id: ModId::CurseForgeId(d.mod_id as u32),
+                                    ignore_loader: mod_.ignore_loader,
+                                    ignore_version: mod_.ignore_version,
+                                    side: mod_.side, // doesn't matter in this situation
+                                })
+                                .collect();
+                            dependencies_.into_iter().for_each(|d| {
+                                let mut dependencies = dependencies.lock().expect("Mutex poisoned");
+                                if !dependencies.contains(&d) {
+                                    info!("Adding dependency: {}, id: {}", d.name, d.id);
+                                    dependencies.push(d);
+                                }
+                            });
+
+                            Ok(Downloadable {
+                                download_url: ok.0.download_url.ok_or(
+                                    BreezeError::DistributionDenied(
+                                        mod_.name.clone(),
+                                        mod_.id.clone(),
+                                    ),
+                                )?,
+                                output: PathBuf::from(if ok.0.file_name.ends_with(".jar") {
+                                    "mods"
+                                } else {
+                                    &output
+                                })
+                                .join(ok.0.file_name),
+                                length: ok.0.file_length as u64,
                             })
-                            .collect();
-                    dependencies_.into_iter().for_each(|d| {
-                        if !dependencies.contains(&d) {
-                            dependencies.push(d);
-                        }
-                    });
-                    Ok(Downloadable {
-                        download_url: ok
-                            .0
-                            .download_url
-                            .ok_or(BreezeError::DistributionDenied(mod_.name.clone(), mod_.id))?,
-                        output: PathBuf::from(if ok.0.file_name.ends_with(".jar") {
-                            "mods"
-                        } else {
-                            output
-                        })
-                        .join(ok.0.file_name),
-                        length: ok.0.file_length as u64,
-                    })
-                },
-            );
-            match downloadable {
-                Ok(ok) => to_download.borrow_mut().push(ok),
-                Err(err) => error!("{}", err),
-            }
+                        },
+                    ),
+                    ModId::ModrinthId(id) => mod_downloadable::get_latest_compatible_version(
+                        &ferinth.list_versions(&id.to_string()).await?,
+                        mc_version_to_check.as_deref(),
+                        loader_to_check.as_ref(),
+                    )
+                    .map_or_else(
+                        || {
+                            Err(BreezeError::NoCompatFile(
+                                mod_.name.clone(),
+                                mod_.id.clone(),
+                            ))
+                        },
+                        |ok| {
+                            for d in ok.1.dependencies.into_iter().filter(|d| {
+                                d.dependency_type == DependencyType::Required
+                                    && (d.project_id.is_some() || d.version_id.is_some())
+                            }) {
+                                let project_id = if let Some(project_id) = d.project_id {
+                                    project_id
+                                } else {
+                                    if let Ok(ok) =
+                                        block_on(ferinth.get_version(&d.version_id.unwrap()))
+                                    {
+                                        ok.project_id
+                                    } else {
+                                        continue;
+                                    }
+                                };
+                                let d = Mod {
+                                    name: format!("Dependency of {}", &mod_.name),
+                                    id: ModId::ModrinthId(project_id),
+                                    ignore_loader: mod_.ignore_loader,
+                                    ignore_version: mod_.ignore_version,
+                                    side: mod_.side, // doesn't matter in this situation
+                                };
+                                let mut dependencies = dependencies.lock().expect("Mutex poisoned");
+                                if !dependencies.contains(&d) {
+                                    info!("Adding dependency: {}, id: {}", d.name, d.id);
+                                    dependencies.push(d);
+                                }
+                            }
+
+                            Ok(Downloadable {
+                                download_url: ok.0.url,
+                                output: PathBuf::from(if ok.0.filename.ends_with(".jar") {
+                                    "mods"
+                                } else {
+                                    &output
+                                })
+                                .join(ok.0.filename),
+                                length: ok.0.size as u64,
+                            })
+                        },
+                    ),
+                };
+
+                match downloadable {
+                    Ok(ok) => to_download.write().await.push(ok),
+                    Err(err) => error!("{}", err),
+                }
+                Ok::<(), anyhow::Error>(())
+            });
         }
+        while let Some(res) = tasks.join_next().await {
+            let _res = res??;
+        }
+        let dependencies = dependencies.lock().expect("Mutex poisoned");
         if !dependencies.is_empty() {
-            inner(dependencies, furse, mc_version, loader, to_download, output).await?;
+            inner(
+                dependencies.clone(),
+                furse,
+                ferinth,
+                mc_version,
+                loader,
+                to_download,
+                output,
+            )
+            .await?;
         }
         Ok(())
     }
-    let to_download = RefCell::new(Vec::new());
+    let to_download = Arc::new(RwLock::new(Vec::new()));
     let mut futures = Vec::new();
+    let mc_version = Arc::new(pack.mc_version);
+    let loader = Arc::new(pack.loader);
     futures.push(inner(
         mods,
         &furse,
-        &pack.mc_version,
-        &pack.loader,
-        &to_download,
-        "mods",
+        &ferinth,
+        mc_version.clone(),
+        loader.clone(),
+        to_download.clone(),
+        Arc::new(String::from("mods")),
     ));
     if resourcepacks {
         futures.push(inner(
             pack.resourcepacks,
             &furse,
-            &pack.mc_version,
-            &pack.loader,
-            &to_download,
-            "resourcepacks",
+            &ferinth,
+            mc_version.clone(),
+            loader.clone(),
+            to_download.clone(),
+            Arc::new(String::from("resourcepacks")),
         ));
     }
     if shaderpacks {
         futures.push(inner(
             pack.shaderpacks,
             &furse,
-            &pack.mc_version,
-            &pack.loader,
-            &to_download,
-            "shaderpacks",
+            &ferinth,
+            mc_version.clone(),
+            loader.clone(),
+            to_download.clone(),
+            Arc::new(String::from("shaderpacks")),
         ));
     }
     for res in futures::future::join_all(futures).await {
         res?
     }
-    Ok(to_download.into_inner())
+    Ok(Arc::try_unwrap(to_download)
+        .map_err(|_| anyhow::anyhow!("Failed to run threads to completion"))?
+        .into_inner())
 }
 
 pub async fn download(output_dir: Arc<PathBuf>, to_download: Vec<Downloadable>) -> Result<()> {

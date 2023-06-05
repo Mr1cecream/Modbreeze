@@ -1,12 +1,11 @@
 use crate::errors::BreezeError;
-use crate::structs::{Mod, ModSide, Pack};
+use crate::structs::{Mod, ModId, ModSide, Pack};
 use anyhow::Result;
 use libium::config::structs::ModLoader;
 use log::{info, warn};
 use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
-
 
 #[derive(Deserialize)]
 struct Data {
@@ -29,9 +28,9 @@ struct Mods {
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
 enum TomlMod {
-    Id(u32),
+    Id(ModId),
     Tabled {
-        id: u32,
+        id: ModId,
         ignore_loader: Option<bool>,
         ignore_version: Option<bool>,
     },
@@ -113,7 +112,7 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: Option<HashMap<String, TomlMod>>, side
             };
             Mod {
                 name,
-                id: *id,
+                id: id.clone(),
                 side,
                 ignore_loader,
                 ignore_version,
@@ -122,10 +121,9 @@ fn convert_mods(mods: &mut Vec<Mod>, raw: Option<HashMap<String, TomlMod>>, side
         .filter(|mod_| {
             if mods.contains(mod_) {
                 warn!("Found duplicate mod: {}, id: {}", mod_.name, mod_.id);
-                false
-            } else {
-                true
+                return false;
             }
+            true
         })
         .collect();
     for mod_ in new {
